@@ -9,19 +9,19 @@
                      // PB5 #13  #10
 
 // PORTC bit        Ard Prt Pin  DRAM
-#define A6TOA8  0x07 // PC0 #14  #13
-                     // PC1 #15  #9
-                     // PC2 #16  #1
-#define BLU_LED 0x10 // PC4 #18
-#define RED_LED 0x20 // PC5 #19
+#define A6TOA8  0x07 // PC0 #23  #13
+                     // PC1 #24  #9
+                     // PC2 #25  #1
+#define DUT_PWR 0x10 // PC4 #27
+#define RED_LED 0x20 // PC5 #28
 
 // PORTD bit        Ard Prt Pin  DRAM
-#define DIN     0x04 // PC2 #4   #2
-#define DOUT    0x08 // PC3 #5   #14
+#define DIN     0x04 // PD2 #4   #2
+#define DOUT    0x08 // PD3 #5   #14
 #define GRN_LED 0x10 // PD4 #6  
-#define CAS     0x20 // PC5 #11  #15
-#define RAS     0x40 // PC6 #12  #4
-#define WE      0x80 // PC7 #13  #3
+#define CAS     0x20 // PD5 #11  #15
+#define RAS     0x40 // PD6 #12  #4
+#define WE      0x80 // PD7 #13  #3
 
 // Set Ports/Pins to correrct settings to running test
 void initTest()
