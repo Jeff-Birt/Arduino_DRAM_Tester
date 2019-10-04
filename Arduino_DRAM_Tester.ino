@@ -5,13 +5,20 @@
 */
 
 // NOTES:
-// Need to draw up schematics
+// Mega 8VDC external input, draw 100ma idle, 150ma testing 41256
+// 4116 -5V->200ua, +5V->1ma, 12V->35ma
+// MW SPA01A-12 9-18VDC in 12VDC out $8.28
+// MW DCW03A-05 9-18VDC in +-5VDC out $9.69
 
 #include "All_Defs.h"
 #ifdef ARDUINO_AVR_MEGA2560
 #include "Mega_Defs.h"
 #elif ARDUINO_AVR_UNO
 #include "Uno_Defs.h"
+#elif ARDUINO_AVR_NANO
+#include "Nano_Defs.h"
+#elif ARDUINO_AVR_MICRO
+#include "Micro_Defs.h"
 #endif
 
 enum UISTATES
@@ -37,7 +44,7 @@ enum REFRESH_STATES
 
 UISTATES uistate = BEGIN;
 LEDSTATES ledstate = LED_OFF;
-REFRESH_STATES refstate = REF_ON;
+REFRESH_STATES refstate = REF_OFF;
 int ref_row; // ROW address for refresh interrupt handler
 int blinkCounter; // LED blink counter
 
@@ -46,12 +53,12 @@ int blinkCounter; // LED blink counter
 void setup() 
 {
   initStandby();
-  
+
   ref_row = 0;
   blinkCounter = 0;
   ledstate = LED_OFF;
   ENABLE_REFRESH; // enable refresh timer
-  TCCR2B = (TCCR2B & B11111000) | 0x03; // set refresh rate to 1ms
+  TCCR3B = (TCCR3B & B11111000) | 0x03; // set refresh rate to 2ms
   
   Serial.begin(9600);
 }
@@ -64,6 +71,7 @@ void loop()
 
   if (uistate == BEGIN)
   {
+    delay(2000);
     unsigned int miss; // miss counter, incorrect bits
     ledstate = LED_OFF;
   
@@ -82,7 +90,7 @@ void loop()
     {
       Serial.println("Testing 4164...");
       ledstate = LED_BLINK;
-      doTests(255, 2552);
+      doTests(255, 255);
       Serial.println();
       Serial.println("Again? Y/N");
       uistate = AGAIN;
@@ -120,7 +128,7 @@ void doTests(int maxRow, int maxCol)
 {
   bool failure = false;
   initTest();
-  
+
   writePattern(maxRow, maxCol, 0x00);
   delay(1000);
   failure |= showResults( readPattern(maxRow, maxCol, 0x00), "Fill 0x00 - ");
@@ -156,6 +164,7 @@ void doTests(int maxRow, int maxCol)
     Serial.println("All tests passed!");
   }
 
+  refstate = REF_OFF;
   ledstate = failure ? LED_OFF : LED_ON;
   initStandby();
 }
@@ -205,6 +214,7 @@ void writePattern(int maxRow, int maxCol, byte pattern)
 
       setCol(col);  // set COLUMN address
       setCAS();
+      NOP;           // delay 62.5ns
 
       resetWE();    // reset all control lines
       resetCAS();
@@ -238,6 +248,7 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
       setCol(col);   // set COLUMN address
       setCAS();
       NOP;           // delay 62.5ns
+      NOP;           // delay 62.5ns, need secondf one for micro
       
       // verify bit value based on pattern passed
       if ( readBit() !=  ((pattern & bitMask) != 0)) { miss++; }
@@ -257,8 +268,9 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
 // Interrupt fires every 1ms so all 512 rows are done every 4ms
 // Also, handles LED flashing
 // NOTE: Serial writes can interfere with this ISR
-ISR(TIMER2_OVF_vect)
+ISR(TIMER3_OVF_vect)
 {
+  ledToggle();
   // Refresh DRAM is turned on
   if (refstate == REF_ON)
   {
@@ -270,22 +282,22 @@ ISR(TIMER2_OVF_vect)
     if (ref_row >=512) ref_row = 0;
   }
 
-  // update Green LED
-  if (ledstate == LED_BLINK)
-  {  
-    if (blinkCounter > 500) 
-    {   
-      ledToggle();
-      blinkCounter = 0;
-    }   
-    blinkCounter++;
-  } 
-  else if (ledstate == LED_ON)
-  {
-    ledON();
-  }
-  else if (ledstate == LED_OFF)
-  {
-    ledOFF();
-  }
+//  // update Green LED
+//  if (ledstate == LED_BLINK)
+//  {  
+//    if (blinkCounter > 500) 
+//    {   
+//      ledToggle();
+//      blinkCounter = 0;
+//    }   
+//    blinkCounter++;
+//  } 
+//  else if (ledstate == LED_ON)
+//  {
+//    ledON();
+//  }
+//  else if (ledstate == LED_OFF)
+//  {
+//    ledOFF();
+//  }
 }
