@@ -1,14 +1,14 @@
 #pragma once
 
 //PORTB bit         Ard Prt Pin  DRAM
-#define A0TOA6  0xFF // PB0 #19  #05
-//                      PB1 #17  #07
-//                      PB2 #18  #06
-//                      PB3 #16  #12
-//                      PB4 #30  #11
-//                      PB5 #31  #10
-//                      PB6 #32  #13
-//  RXLED               PB7 
+//  RXLED               PB0 
+#define A0TOA6  0xFF // PB1 #17  #05
+//                      PB2 #18  #07
+//                      PB3 #16  #06
+//                      PB4 #30  #12
+//                      PB5 #31  #11
+//                      PB6 #32  #10
+//                      PB7 #33  #13
 
 //PORTC bit         Ard Prt Pin  DRAM
 //                      PC0
@@ -17,15 +17,15 @@
 //                      PC3
 //                      PC4
 //                      PC5
-//#define A7TOA8  0xC0 // PC6 #01  #01
-//                      PC7 #27  #09
+#define GRN_LED 0x10 // PC6 #27
+//                      PC7 
 
 //PORTD bit         Ard Prt Pin  DRAM
 // SDA                  PD0
 // SCL                  PD1
 //                      PD2
 //                      PD3
-#define GRN_LED 0x10 // PD4
+#define KEYPAD  0x10 // PD4 #26
 //                      PD5
 #define A7TOA8  0xC0 // PC6 #34  #01
 //                      PC7 #28  #09

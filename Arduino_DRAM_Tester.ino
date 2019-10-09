@@ -7,8 +7,6 @@
 // NOTES:
 // Mega 8VDC external input, draw 100ma idle, 150ma testing 41256
 // 4116 -5V->200ua, +5V->1ma, 12V->35ma
-// MW SPA01A-12 9-18VDC in 12VDC out $8.28
-// MW DCW03A-05 9-18VDC in +-5VDC out $9.69
 
 #include "All_Defs.h"
 #ifdef ARDUINO_AVR_MEGA2560
@@ -17,113 +15,95 @@
 #include "Uno_Defs.h"
 #elif ARDUINO_AVR_NANO
 #include "Nano_Defs.h"
-#elif ARDUINO_AVR_MICRO
+#else //ARDUINO_AVR_MICRO
 #include "Micro_Defs.h"
 #endif
-
-enum UISTATES
-{
-  BEGIN,
-  SELECT,
-  AGAIN,
-  DONE
-};
-
-enum LEDSTATES
-{
-  LED_ON,
-  LED_BLINK,
-  LED_OFF
-};
-
-enum REFRESH_STATES
-{
-  REF_ON,
-  REF_OFF
-};
 
 UISTATES uistate = BEGIN;
 LEDSTATES ledstate = LED_OFF;
 REFRESH_STATES refstate = REF_OFF;
-int ref_row; // ROW address for refresh interrupt handler
-int blinkCounter; // LED blink counter
+volatile int ref_row = 0;;		// ROW address for refresh interrupt handler
+volatile int blinkCounter = 0;	// LED blink counter
+int ref_maxRow = 512;			// maxium rows of DRAM (for refresh)
 
 // the setup function runs once when you press reset or power the board
-// TCCR2B sets Timer2 divisor, overflow = (1/F)*2^8*divisor
+// Initalize IO to standby state, enable refresh timer
 void setup() 
 {
   initStandby();
 
-  ref_row = 0;
-  blinkCounter = 0;
-  ledstate = LED_OFF;
-  ENABLE_REFRESH; // enable refresh timer
   TCCR3B = (TCCR3B & B11111000) | 0x03; // set refresh rate to 2ms
+  //ENABLE_REFRESH; // enable refresh timer ***can't start refresh timer until part size known
   
   Serial.begin(9600);
 }
 
 
 // the loop function runs over and over again forever
-// UI states - 0:Begin, 1:Select_Test, 3:Again, 4:Done
+// We use the loop function for the UI
 void loop() 
 {
+	char ch;
 
-  if (uistate == BEGIN)
-  {
-    delay(2000);
-    unsigned int miss; // miss counter, incorrect bits
-    ledstate = LED_OFF;
+	switch (uistate)
+	{
+		case BEGIN :
+			delay(2000);		// give the Micro serial time to come up
+			unsigned int miss;	// miss counter, incorrect bits
+			ledstate = LED_OFF;
   
-    Serial.println("Hi, DRAM Tester Ready!");
-    Serial.println("Choose DRAM type");
-    Serial.println("1 - 4164");
-    Serial.println("2 - 41256");
+			Serial.println(F("Hi, DRAM Tester Ready!"));
+			Serial.println(F("Choose DRAM type"));
+			Serial.println(F("1 - 4164"));
+			Serial.println(F("2 - 41256"));
 
-    uistate = SELECT;
-  }
+			uistate = SELECT;
+			break;
 
-  if (uistate == SELECT && Serial.available())
-  {
-    char ch = Serial.read();
-    if (ch == '1')
-    {
-      Serial.println("Testing 4164...");
-      ledstate = LED_BLINK;
-      doTests(255, 255);
-      Serial.println();
-      Serial.println("Again? Y/N");
-      uistate = AGAIN;
-    }
-    else if (ch == '2')
-    {
-      Serial.println("Testing 41256...");
-      ledstate = LED_BLINK;
-      doTests(511, 511);
-      Serial.println();
-      Serial.println("Again? Y/N");
-      uistate = AGAIN;
-    }
-  }
+		case SELECT :
+			ch = Serial.read();
+			if (ch == '1')
+			{
+				ref_maxRow = 256;
+				Serial.println(F("Testing 4164..."));
+				ledstate = LED_BLINK;
+				doTests(255, 255);
+				Serial.println();
+				Serial.println(F("Again? Y/N"));
+				uistate = AGAIN;
+			}
+			else if (ch == '2')
+			{
+				ref_maxRow = 512;
+				Serial.println(F("Testing 41256..."));
+				ledstate = LED_BLINK;
+				doTests(511, 511);
+				Serial.println();
+				Serial.println(F("Again? Y/N"));
+				uistate = AGAIN;
+			}
+			break;
 
-  if (uistate == AGAIN && Serial.available())
-  {
-    char ch = Serial.read();
-    if (ch == 'Y' || ch == 'y')
-    {
-      Serial.println();
-      Serial.println();
-      uistate = BEGIN;
+		case AGAIN :
+			ch = Serial.read();
+			if (ch == 'Y' || ch == 'y')
+			{
+				Serial.println();
+				Serial.println();
+				uistate = BEGIN;
+			}
+			else if (ch == 'N' || ch == 'n')
+			{
+				Serial.println(F("BYE!"));
+				uistate = DONE;
+			}
+			break;
     }
-    else if (ch == 'N' || ch == 'n')
-    {
-      Serial.println("BYE!");
-      uistate = DONE;
-    }
-  }
   
 }
 
+// Runs a series of tests with various bit patterns
+// maxRow, maxCol -> maximum row and column DRAM has
 void doTests(int maxRow, int maxCol)
 {
   bool failure = false;
@@ -131,37 +111,37 @@ void doTests(int maxRow, int maxCol)
 
   writePattern(maxRow, maxCol, 0x00);
   delay(1000);
-  failure |= showResults( readPattern(maxRow, maxCol, 0x00), "Fill 0x00 - ");
+  failure |= showResults( readPattern(maxRow, maxCol, 0x00), F("Fill 0x00 - "));
   
   writePattern(maxRow, maxCol, 0xFF);
   delay(1000);
-  failure |= showResults( readPattern(maxRow, maxCol, 0xFF), "Fill 0xFF - ");
+  failure |= showResults( readPattern(maxRow, maxCol, 0xFF), F("Fill 0xFF - "));
 
   writePattern(maxRow, maxCol, 0x55);
   delay(1000);
-  failure |= showResults( readPattern(maxRow, maxCol, 0x55), "Fill 0x55 - ");
+  failure |= showResults( readPattern(maxRow, maxCol, 0x55), F("Fill 0x55 - "));
 
   writePattern(maxRow, maxCol, 0xAA);
   delay(1000);
-  failure |= showResults( readPattern(maxRow, maxCol, 0xAA), "Fill 0xAA - ");
+  failure |= showResults( readPattern(maxRow, maxCol, 0xAA), F("Fill 0xAA - "));
 
   writePattern(maxRow, maxCol, 0x00);
   delay(1000);
-  failure |= (showResults( readPattern(maxRow, maxCol, 0x55), "Seeded Failure #1 - ") == false);
+  failure |= (showResults( readPattern(maxRow, maxCol, 0x55), F("Seeded Failure #1 - ")) == false);
 
   writePattern(maxRow, maxCol, 0xFF);
   delay(1000);
-  failure |= (showResults( readPattern(maxRow, maxCol, 0x55), "Seeded Failure #2 - ") == false);
+  failure |= (showResults( readPattern(maxRow, maxCol, 0x55), F("Seeded Failure #2 - ")) == false);
 
   if (failure) 
   {
     Serial.println();
-    Serial.println("At least one test failed...");
+    Serial.println(F("At least one test failed..."));
   }
   else
   {
     Serial.println();
-    Serial.println("All tests passed!");
+    Serial.println(F("All tests passed!"));
   }
 
   refstate = REF_OFF;
@@ -169,6 +149,7 @@ void doTests(int maxRow, int maxCol)
   initStandby();
 }
 
+// display results over sreial link
 bool showResults(unsigned int miss, String lable)
 {
   Serial.println();
@@ -176,18 +157,17 @@ bool showResults(unsigned int miss, String lable)
 
   if ( miss > 0 )
   {
-    Serial.print("Test failed! Misses: ");
+    Serial.print(F("Test failed! Misses: "));
     Serial.print(miss);
     return true;
   }
   else
   {
-    Serial.print("Test passed! Misses: ");
+    Serial.print(F("Test passed! Misses: "));
     Serial.print(miss);
     return false;
   }
 }
-
 
 // Fills DRAM with pattern of bits
 void writePattern(int maxRow, int maxCol, byte pattern)
@@ -214,7 +194,7 @@ void writePattern(int maxRow, int maxCol, byte pattern)
 
       setCol(col);  // set COLUMN address
       setCAS();
-      NOP;           // delay 62.5ns
+      NOP;          // delay 62.5ns
 
       resetWE();    // reset all control lines
       resetCAS();
@@ -248,7 +228,7 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
       setCol(col);   // set COLUMN address
       setCAS();
       NOP;           // delay 62.5ns
-      NOP;           // delay 62.5ns, need secondf one for micro
+      NOP;           // delay 62.5ns, need second one for micro
       
       // verify bit value based on pattern passed
       if ( readBit() !=  ((pattern & bitMask) != 0)) { miss++; }
@@ -267,11 +247,10 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
 // Performs DRAM refresh, 64 Rows each interrupt
 // Interrupt fires every 1ms so all 512 rows are done every 4ms
 // Also, handles LED flashing
-// NOTE: Serial writes can interfere with this ISR
+// NOTE: Serial writes can interfere with this ISR timing
 ISR(TIMER3_OVF_vect)
 {
-  ledToggle();
-  // Refresh DRAM is turned on
+  // Refresh DRAM if enabled
   if (refstate == REF_ON)
   {
     for (int i = 64; i; i--)
@@ -279,7 +258,7 @@ ISR(TIMER3_OVF_vect)
       refreshRow(ref_row);
       ref_row++;
     }
-    if (ref_row >=512) ref_row = 0;
+    if (ref_row >= ref_maxRow) ref_row = 0; // todo: need max row adjusted for part
   }
 
 //  // update Green LED
