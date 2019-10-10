@@ -17,7 +17,7 @@
 //                      PC3
 //                      PC4
 //                      PC5
-#define GRN_LED 0x10 // PC6 #27
+#define GRN_LED 0x40 // PC6 #27
 //                      PC7 
 
 //PORTD bit         Ard Prt Pin  DRAM
@@ -46,11 +46,11 @@ void initTest()
 {
   DDRB = DDRB | A0TOA6;
   DDRD = DDRD | A7TOA8;
-  DDRD = DDRD | GRN_LED;
+  DDRC = DDRC | GRN_LED;
   DDRF = DDRF | CAS | RAS | WE | DIN | DUT_PWR; // outputs
   DDRF = DDRF & ~DOUT; // input
 
-  PORTD = PORTD & ~GRN_LED; // turn off LEDs
+  PORTC = PORTC & ~GRN_LED; // turn off LEDs
   PORTF = PORTF | RAS | CAS | WE;  // set HIGH
   PORTF = PORTF & ~DUT_PWR; // turn ON +5V to DUT 
 }
@@ -60,7 +60,7 @@ void initStandby()
 {
   DDRB = DDRB & ~A0TOA6;
   DDRD = DDRD & ~A7TOA8;
-  DDRD = DDRD | GRN_LED;
+  DDRC = DDRC | GRN_LED;
   DDRF = DDRF & ~(DIN | RAS | CAS | WE);
   DDRF = DDRF & ~DOUT;
 
@@ -80,22 +80,12 @@ inline void setCol(int col)
 {
   PORTB = (byte)(col << 1);   // Write out COL address
   PORTD = (PORTD & ~A7TOA8) | ((col & 0x180) >> 1); //
-//  Serial.print("Col:");
-//  Serial.print(col, HEX); Serial.print(", ");
-//  Serial.print((byte)(col << 1), HEX); Serial.print(", ");
-//  Serial.print( (PORTC & ~A7TOA8) | ((col & 0x180) >> 1), HEX);
-//  Serial.println();
 }
 
 inline void setRow(int row)
 {
   PORTB = (byte)(row << 1);    // Write out ROW address
   PORTD = (PORTD & ~A7TOA8) | ((row & 0x180) >> 1); // 
-//  Serial.print("Row:");
-//  Serial.print(row, HEX); Serial.print(", ");
-//  Serial.print((byte)(row << 1), HEX); Serial.print(", ");
-//  Serial.print((byte)((PORTC & ~A7TOA8) | ((row >> 2) & A7TOA8, HEX)));
-//  Serial.print(" - ");
 }
 
 inline void resetCAS()
@@ -143,15 +133,15 @@ inline void refreshRow(int row)
 
 inline void ledOFF()
 {
-  PORTD = PORTD & ~GRN_LED; // turn off grn LED
+  PORTC = PORTC & ~GRN_LED; // turn off grn LED
 }
 
 inline void ledON()
 {
-  PORTD = PORTD | GRN_LED; // turn off grn LED
+  PORTC = PORTC | GRN_LED; // turn off grn LED
 }
 
 inline void ledToggle()
 {
-  PORTD = PORTD ^ GRN_LED; // toggle grn LED
+  PORTC = PORTC ^ GRN_LED; // toggle grn LED
 }
