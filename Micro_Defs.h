@@ -61,21 +61,27 @@ void initStandby()
   DDRB = DDRB & ~A0TOA6;
   DDRD = DDRD & ~A7TOA8;
   DDRC = DDRC | GRN_LED;
-  DDRF = DDRF & ~(DIN | RAS | CAS | WE);
-  DDRF = DDRF & ~DOUT;
+  DDRF = DDRF & ~(DIN | RAS | CAS | WE | DOUT);
+  //DDRF = DDRF & ~DOUT;
+  //DDRF = DDRF & ~(DIN | RAS | CAS | WE);
+  //DDRF = DDRF & ~DOUT;
 
   PORTB = PORTB & ~A0TOA6;
   PORTD = PORTD & ~A7TOA8;
   PORTF = PORTF | DUT_PWR; // turn OFF +5V to DUT
-  PORTF = PORTF & ~(DIN | RAS | CAS | WE);
-  PORTF = PORTF & ~DOUT;
+  PORTF = PORTF & ~(DIN | RAS | CAS | WE | DOUT);
+  //PORTF = PORTF & ~DOUT;
+  //PORTF = PORTF & ~(DIN | RAS | CAS | WE);
+  //PORTF = PORTF & ~DOUT;
 }
 
+// set Data IN pin of DRAM
 inline void setDIN(byte pattern, byte bitMask)
 {
   PORTF = (PORTF & ~DIN) | ( ((pattern & bitMask)>0) ? DIN : 0); // clear DIN bit, conditinally set
 }
 
+// set column address, could combine with row as well
 inline void setCol(int col)
 {
   PORTB = (byte)(col << 1);   // Write out COL address
@@ -88,41 +94,49 @@ inline void setRow(int row)
   PORTD = (PORTD & ~A7TOA8) | ((row & 0x180) >> 1); // 
 }
 
+// set Column Address Select HIGH (off)
 inline void resetCAS()
 {
   PORTF = PORTF | CAS;  // Set CAS HIGH
 }
 
+// set Column Address Select LOW (on)
 inline void setCAS()
 {
   PORTF = PORTF & ~CAS; // Set CAS LOW
 }
 
-inline void setRAS()
-{
-  PORTF = PORTF & ~RAS; // set RAS low
-}
-
+// set Row Address Select HIGH (off)
 inline void resetRAS()
 {
   PORTF = PORTF | RAS;  // Set RAS HIGH
 }
 
+// set Row Address Select LOW (on)
+inline void setRAS()
+{
+  PORTF = PORTF & ~RAS; // set RAS low
+}
+
+// set Write Enable HIGH (off)
+inline void resetWE()
+{
+	PORTF = PORTF | WE;   // Set WE high to complete write
+}
+
+// set Write Enable LOW (on)
 inline void setWE()
 {
   PORTF = PORTF & ~WE;  // Set WE low for write
 }
 
-inline void resetWE()
-{
-  PORTF = PORTF | WE;   // Set WE high to complete write
-}
-
+// read bit state from DRAM DOUT pin
 inline bool readBit()
 {
   return ((PINF & DOUT) != 0);
 }
 
+// refresh row to maintain DRAM data
 inline void refreshRow(int row)
 {
   PORTB = (byte)(row << 1);    // Write out ROW address
@@ -131,16 +145,19 @@ inline void refreshRow(int row)
   PORTF = PORTF | RAS;  // set RAS high
 }
 
+// turn LED off
 inline void ledOFF()
 {
   PORTC = PORTC & ~GRN_LED; // turn off grn LED
 }
 
+// turn LED on
 inline void ledON()
 {
   PORTC = PORTC | GRN_LED; // turn off grn LED
 }
 
+// toggle LED state
 inline void ledToggle()
 {
   PORTC = PORTC ^ GRN_LED; // toggle grn LED

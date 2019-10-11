@@ -25,12 +25,13 @@
 #include <Fonts/FreeMono9pt7b.h> 
 
 LEDSTATES ledstate = LED_OFF;
+UISTATES uistate = SPLASH;			// start out showing our plash screen
 volatile REFRESH_STATES refstate = REF_OFF;
+volatile int ref_maxRow = 512;	// maxium rows of DRAM (for refresh)
 int ref_row = 0;;		// ROW address for refresh interrupt handler
 int blinkCounter = 0;	// LED blink counter
-volatile int ref_maxRow = 512;	// maxium rows of DRAM (for refresh)
+static const int keypadPin = A6;    // analog input for keypad
 
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 // about 3.5 lines, 11-12 columns with fount used
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); //7.8K
@@ -38,8 +39,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); //7.8K
 String DRAM_NAME[3] = { "4116", "4164", "41256" };	// could use PROGMEM to put these in flash
 int DRAM_MAX_ROW[3] = { 127, 255, 511 };			// corresponding max #rows
 int dramSel = DRAM_4116;
-static const int keypadPin = A6;    // analog input for keypad
-UISTATES uistate = SPLASH;
+
 
 // the setup function runs once when you press reset or power the board
 // Initalize IO to standby state, enable refresh timer
@@ -48,32 +48,32 @@ void setup()
 	initStandby();
 
 	TCCR3B = (TCCR3B & B11111000) | 0x03; // set refresh rate to 2ms
-	ENABLE_REFRESH; // enable refresh timer, does not enable CAS strobing
+	ENABLE_REFRESH;					// enable refresh interrupt timer
 
-	Serial.begin(9600);
+	Serial.begin(9600);				// Only used for debugging
 	Serial.println("Setup");
 
-	if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) //3.6k
+	if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
 	{
 		Serial.println(F("SSD1306 allocation failed"));
 		for (;;); // Don't proceed, loop forever
 	}
 
-	display.display();            // Display Adafruit Splash
-	delay(2000);                  // Pause for 2 seconds
+	display.display();				// Display Adafruit Splash
+	delay(2000);					// Pause for 2 seconds
 
 	display.setFont(&FreeMono9pt7b);
-	display.setTextSize(1);       // Normal 1:1 pixel scale
-	display.setTextColor(WHITE);  // Draw white text
-	display.cp437(true);          // Use full 256 char 'Code Page 437' font
+	display.setTextSize(1);			// Normal 1:1 pixel scale
+	display.setTextColor(WHITE);	// Draw white text
+	display.cp437(true);			// Use full 256 char 'Code Page 437' font
 }
-
 
 // the loop function runs over and over again forever
 // We use the loop function for the UI
 void loop()
 {
-	int aIn = 0;
+	int btn = 0;
+	delay(200);		// key repeat timer
 
 	switch (uistate)
 	{
@@ -83,6 +83,7 @@ void loop()
 		display.display();
 		delay(2000);
 
+		dramSel = DRAM_4116;
 		uistate = BEGIN;
 		break;
 
@@ -106,29 +107,16 @@ void loop()
 		break;
 
 	case SELECT:
-		delay(200);	// key repeat timer
-		aIn = analogRead(keypadPin);
-		if (aIn < 975)		// no key
+		btn = getBtn();
+		if (btn == 1)
 		{
-			delay(10); // check again to filter out noise
-			aIn = analogRead(keypadPin);
-			if (aIn < 975)			// no key
-			{
-				if (aIn > 875)		// 'A' key
-				{
-					dramSel++;
-					if (dramSel > 2) { dramSel = 0; }
-					uistate = BEGIN;
-				}
-				else if (aIn > 775)	// 'B' key
-				{
-					uistate = TEST;
-				}
-				//else if (aIn > 675)	// 'A' & 'B' keys
-				//{
-				//	//Serial.println(F("A&B btns "));
-				//}
-			}
+			dramSel++;
+			if (dramSel > 2) { dramSel = 0; }
+			uistate = BEGIN;
+		}
+		else if (btn == 2)
+		{
+			uistate = TEST;
 		}
 		break;
 
@@ -141,35 +129,57 @@ void loop()
 		ledstate = LED_BLINK;
 		doTests(ref_maxRow, ref_maxRow);
 
-		//clearDisplay();
-		display.println("Again?");
-		display.println("A-Yes  B-No");
+		display.println(F("Again?"));
+		display.println(F("A-Yes  B-No"));
 		display.display();
 		uistate = AGAIN;
 		break;
 
 	case AGAIN:
-		delay(200);	// key repeat timer
-		aIn = analogRead(keypadPin);
-		if (aIn < 975)		// no key
+		btn = getBtn();
+		if (btn == 1)
 		{
-			delay(10); // check again to filter out noise
-			aIn = analogRead(keypadPin);
-			if (aIn < 975)			// no key
-			{
-				if (aIn > 875)		// 'A' key == YES
-				{
-					uistate = TEST;
-				}
-				else if (aIn > 775)	// 'B' key == NO
-				{
-					uistate = SPLASH;
-				}
-			}
+			uistate = TEST;
 		}
+		else if (btn == 2)
+		{
+			uistate = SPLASH;
+		}
+
 		break;
 	}
 
+}
+
+// returns btn pressed, no btn=0, A=1, B=2, A&B=3
+int getBtn()
+{
+	int aIn = analogRead(keypadPin);
+	int result = 0;
+
+	if (aIn < 975)	// no key if > 975
+	{
+		delay(10); // check again to filter out noise
+		aIn = analogRead(keypadPin);
+
+		if (aIn < 975)			// no key
+		{
+			if (aIn > 875)		// 'A' key
+			{
+				result = 1;
+			}
+			else if (aIn > 775)	// 'B' key
+			{
+				result = 2;
+			}
+			else if (aIn > 675)	// 'A' & 'B' keys
+			{
+				result = 3;
+			}
+		}
+	}
+
+	return result;
 }
 
 // Runs a series of tests with various bit patterns
@@ -206,7 +216,7 @@ void doTests(int maxRow, int maxCol)
 	failure |= showResults((miss > 0), miss, F("Fill 0xAA"));
 	delay(2000);
 
-	// 'miss > 0' for Seeded failure tests, i.e. (miss > 0) == PASS
+	// miss should be > 0 for Seeded failure tests, i.e. (miss > 0) == PASS
 	writePattern(maxRow, maxCol, 0x00);
 	delay(1000);
 	miss = readPattern(maxRow, maxCol, 0x55);
@@ -219,48 +229,26 @@ void doTests(int maxRow, int maxCol)
 	failure |= showResults((miss == 0), miss, F("Seeded #2"));
 	delay(2000);
 
-	if (failure)
-	{
-		clearDisplay();
-		display.println(F("Failed"));
-		display.display();
-	}
-	else
-	{
-		clearDisplay();
-		display.println(F("Passed"));
-		display.display();
-	}
+	clearDisplay();
+	failure ? display.println(F("Failed")) : display.println(F("Passed"));
+	display.display();
 
 	refstate = REF_OFF;
 	ledstate = failure ? LED_OFF : LED_ON;
 	initStandby();
 }
 
-// display results over sreial link
+// display results
 bool showResults(bool fail, unsigned int miss, String lable)
 {
-	bool result = false;
-
 	clearDisplay();
 	display.println(lable);
-	display.display();
 
-	/*if (miss > 0)*/
-	if (fail)
-	{
-		display.println(F("Fail "));
-		display.println(miss);
-		result = true;
-	}
-	else
-	{
-		display.println(F("Passed "));
-		display.println(miss);
-	}
+	fail ? display.println(F("Fail ")) : display.println(F("Passed "));
 
+	display.println(miss);
 	display.display();
-	return result;
+	return fail;
 }
 
 // Fills DRAM with pattern of bits
@@ -269,7 +257,7 @@ void writePattern(int maxRow, int maxCol, byte pattern)
 	int row, col, miss = 0;
 	byte bitMask = 0x01;
 
-	refstate = REF_OFF;
+	refstate = REF_OFF; // turn off auto refresh
 	resetCAS();
 	resetRAS();
 	resetWE();
@@ -296,7 +284,7 @@ void writePattern(int maxRow, int maxCol, byte pattern)
 		}
 	}
 
-	refstate = REF_ON; // enable referesh timer
+	refstate = REF_ON; // enable auto referesh
 	return;
 }
 
@@ -338,6 +326,7 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
 
 }
 
+// helper to clear display and set correct cursor location
 void clearDisplay()
 {
 	display.clearDisplay();   // Clear the buffer
@@ -362,8 +351,8 @@ ISR(TIMER3_OVF_vect)
 		if (ref_row > ref_maxRow) { ref_row = 0; } // todo: need max row adjusted for part
 	}
 
-	 // update Green LED
-	 if (ledstate == LED_BLINK)
+	// update Green LED
+	if (ledstate == LED_BLINK)
 	{  
 		if (blinkCounter > 500) 
 		{   
@@ -372,11 +361,11 @@ ISR(TIMER3_OVF_vect)
 		}   
 		blinkCounter++;
 	} 
-	else if (ledstate == LED_ON)
+	else if (ledstate == LED_ON) // will turn LED on even if already on
 	{
 		ledON();
 	}
-	else if (ledstate == LED_OFF)
+	else if (ledstate == LED_OFF) // will turn LED off even if already off
 	{
 		ledOFF();
 	}

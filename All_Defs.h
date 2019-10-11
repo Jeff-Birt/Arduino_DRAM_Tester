@@ -13,14 +13,7 @@
 #define  DRAM_41256 2
 #define  DRAM_END   3
 
-//enum UISTATES
-//{
-//	BEGIN,
-//	SELECT,
-//	AGAIN,
-//	DONE
-//};
-
+// states the UI can be in
 enum UISTATES
 {
 	SPLASH,
@@ -30,6 +23,7 @@ enum UISTATES
 	AGAIN
 };
 
+// states LED can be in
 enum LEDSTATES
 {
 	LED_ON,
@@ -37,13 +31,17 @@ enum LEDSTATES
 	LED_OFF
 };
 
+// DRAM refresh state
 enum REFRESH_STATES
 {
 	REF_ON,
 	REF_OFF
 };
 
-void writePattern(int maxRow, int maxCol, byte pattern);
-unsigned int readPattern(int maxRow, int maxCol, byte pattern);
-bool showResults(unsigned int miss, String lable);
-void doTests(int maxRow, int maxCol);
+
+void writePattern(int maxRow, int maxCol, byte pattern); // write pattern to DRAM
+unsigned int readPattern(int maxRow, int maxCol, byte pattern); // read DRAM, pattern match
+bool showResults(bool fail, unsigned int miss, String lable); // display test results
+void doTests(int maxRow, int maxCol); // do set of tests
+void clearDisplay(); // helper to clear display set cursor position
+int getBtn(); // returns analog button pressed
