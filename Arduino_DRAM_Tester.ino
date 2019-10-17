@@ -16,7 +16,7 @@
 #elif ARDUINO_AVR_NANO
 #include "Nano_Defs.h"
 #else //ARDUINO_AVR_MICRO
-#include "Micro_Defs.h"
+#include "Micro_Defs2.h"
 #endif
 
 #include <Wire.h>
@@ -25,20 +25,20 @@
 #include <Fonts/FreeMono9pt7b.h> 
 
 LEDSTATES ledstate = LED_OFF;
-UISTATES uistate = SPLASH;			// start out showing our plash screen
-volatile REFRESH_STATES refstate = REF_OFF;
-volatile int ref_maxRow = 512;	// maxium rows of DRAM (for refresh)
-int ref_row = 0;;		// ROW address for refresh interrupt handler
-int blinkCounter = 0;	// LED blink counter
-static const int keypadPin = A6;    // analog input for keypad
+UISTATES uistate = SPLASH;					// start out showing our splash screen
+volatile REFRESH_STATES refstate = REF_OFF; // auto reffresh off
+volatile int ref_maxRow = 512;				// maxium rows of DRAM (for refresh)
+int ref_row = 0;							// ROW address for auto refresh
+int blinkCounter = 0;						// Blink counter for green LED
+static const int keypadPin = A5;			// analog input for keypad
 
 // about 3.5 lines, 11-12 columns with fount used
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); //7.8K
+#define OLED_RESET     -1					// OLED Reset pin#, -1 menas none
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); // 
 
 String DRAM_NAME[3] = { "4116", "4164", "41256" };	// could use PROGMEM to put these in flash
 int DRAM_MAX_ROW[3] = { 127, 255, 511 };			// corresponding max #rows
-int dramSel = DRAM_4116;
+int dramSel = DRAM_4116;							// selected DRAM type
 
 
 // the setup function runs once when you press reset or power the board
@@ -53,6 +53,7 @@ void setup()
 	Serial.begin(9600);				// Only used for debugging
 	Serial.println("Setup");
 
+	// set up OLED display
 	if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
 	{
 		Serial.println(F("SSD1306 allocation failed"));
@@ -62,13 +63,12 @@ void setup()
 	display.display();				// Display Adafruit Splash
 	delay(2000);					// Pause for 2 seconds
 
-	display.setFont(&FreeMono9pt7b);
+	display.setFont(&FreeMono9pt7b);// Nice sized font
 	display.setTextSize(1);			// Normal 1:1 pixel scale
 	display.setTextColor(WHITE);	// Draw white text
 	display.cp437(true);			// Use full 256 char 'Code Page 437' font
 }
 
-// the loop function runs over and over again forever
 // We use the loop function for the UI
 void loop()
 {
@@ -94,6 +94,8 @@ void loop()
 		clearDisplay();
 		display.println(F("DRAM type"));
 
+		// print out DRAM list starting with currently selected
+		// also, put a ">" beside currently selected 
 		for (int i = 0; i < DRAM_END; i++)
 		{
 			if (i >= dramSel)
@@ -145,19 +147,19 @@ void loop()
 		{
 			uistate = SPLASH;
 		}
-
 		break;
 	}
 
 }
 
-// returns btn pressed, no btn=0, A=1, B=2, A&B=3
+// returns button pressed, no btn=0, A=1, B=2, A&B=3
 int getBtn()
 {
 	int aIn = analogRead(keypadPin);
 	int result = 0;
 
-	if (aIn < 975)	// no key if > 975
+	// if > 975 no key pressed
+	if (aIn < 975)	
 	{
 		delay(10); // check again to filter out noise
 		aIn = analogRead(keypadPin);
@@ -182,53 +184,33 @@ int getBtn()
 	return result;
 }
 
-// Runs a series of tests with various bit patterns
+// Runs a series of checkboard and walking 1/0 tests
 // maxRow, maxCol -> maximum row and column DRAM has
 void doTests(int maxRow, int maxCol)
 {
 	bool failure = false;
 	int miss = 0;
+	int reps = 1;
+
 	initTest();
 	refstate = REF_ON; // need refresh timer running before starting tests
 	delay(1000);	   // time for DC-DC converter to come up
 
-	writePattern(maxRow, maxCol, 0x00);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0x00);
-	failure |= showResults( (miss > 0), miss, F("Fill 0x00"));
+	// test with checkerboard patterns
+	failure |= runTest(reps, 0x55, maxRow, maxCol, F("Fill 0x55"));
 	delay(2000);
 
-	writePattern(maxRow, maxCol, 0xFF);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0xFF);
-	failure |= showResults((miss > 0), miss, F("Fill 0xFF"));
+	failure |= runTest(reps, 0xAA, maxRow, maxCol, F("Fill 0xAA"));
 	delay(2000);
 
-	writePattern(maxRow, maxCol, 0x55);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0x55);
-	failure |= showResults((miss > 0), miss, F("Fill 0x55"));
+	// test with walking 1/0 tests
+	failure |= walkTest(reps, maxRow, maxCol, true, F("March 0x01"));
 	delay(2000);
 
-	writePattern(maxRow, maxCol, 0xAA);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0xAA);
-	failure |= showResults((miss > 0), miss, F("Fill 0xAA"));
+	failure |= walkTest(reps, maxRow, maxCol, false, F("March 0x00"));
 	delay(2000);
 
-	// miss should be > 0 for Seeded failure tests, i.e. (miss > 0) == PASS
-	writePattern(maxRow, maxCol, 0x00);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0x55);
-	failure |= showResults((miss == 0), miss, F("Seeded #1"));
-	delay(2000);
-
-	writePattern(maxRow, maxCol, 0xFF);
-	delay(1000);
-	miss = readPattern(maxRow, maxCol, 0x55);
-	failure |= showResults((miss == 0), miss, F("Seeded #2"));
-	delay(2000);
-
+	// display final results
 	clearDisplay();
 	failure ? display.println(F("Failed")) : display.println(F("Passed"));
 	display.display();
@@ -238,17 +220,122 @@ void doTests(int maxRow, int maxCol)
 	initStandby();
 }
 
-// display results
-bool showResults(bool fail, unsigned int miss, String lable)
+// runs an individual checkerboard type test
+bool runTest(int reps, int pattern, int maxRow, int maxCol, String lable)
 {
+	unsigned int miss = 0;
+	bool fail;
+
 	clearDisplay();
 	display.println(lable);
+	display.display();
 
+	// run test 'reps' times
+	for (int i = 0; i < reps; i++)
+	{
+		writePattern(maxRow, maxCol, pattern);
+		delay(1000);
+		miss += readPattern(maxRow, maxCol, pattern);
+	}
+
+	fail = (miss != 0) ? true : false;	// miss > 0 is test failure
 	fail ? display.println(F("Fail ")) : display.println(F("Passed "));
+	
+	miss = (fail) ? miss / reps : miss;	// average misses/test
+	display.println(miss);
+	display.display();
+	
+	return fail;
+}
+
+// fill memory with 1 or 0, step through each cell check for filled value
+// write opposite value, check for new value. state == fill value
+bool walkTest(int reps, int maxRow, int maxCol, int state, String lable)
+{
+	int row, col, miss = 0;
+	bool fail = false;
+
+	// first, fill all with state
+	int value = (state == 0) ? 0x00 : 0xFF;
+	String tempLable = " Fill 0x" + String(value, HEX);
+	runTest(1, value, maxRow, maxCol, tempLable);
+
+	clearDisplay();
+	display.println(lable);
+	display.display();
+
+	refstate = REF_OFF; // turn off auto refresh
+	resetCAS();
+	resetRAS();
+	resetWE();
+
+	int walkValue = 1 - state; // walking value is state inverted
+	for (col = 0; col < maxCol; col++)
+	{
+		for (row = 0; row < maxRow; row++)
+		{
+			if (readBit(row, col) == state)
+			{
+				writeBit(row, col, walkValue);
+				if (readBit(row, col) != walkValue)
+				{
+					miss++;
+				}
+			}
+			else
+			{
+				miss++;
+			}		
+		}
+	}
+
+	fail = (miss != 0) ? true : false;	// miss > 0 is test failure
+	fail ? display.println(F("Fail ")) : display.println(F("Passed "));
+	miss = (fail) ? miss / reps : miss; // average misses/test
 
 	display.println(miss);
 	display.display();
+
 	return fail;
+}
+
+// write a single bit
+void writeBit(int row, int col, int state)
+{
+	setDIN( (state==1) );
+
+	setRow(row);	// set ROW address
+	setRAS();		// set RAS low (active)
+	setWE();		// set WE low (active)
+
+	setCol(col);	// set COLUMN address
+	setCAS();		// set CAS low (active)
+
+	resetWE();		// reset all control lines
+	resetCAS();
+	resetRAS();
+}
+
+// read a single bit
+int readBit(int row, int col)
+{
+	int value = 0;
+
+	setRow(row);	// set ROW address
+	setRAS();		// set RAS low (active)
+
+	setCol(col);	// set COLUMN address
+	setCAS();		// set CAS low (active)
+	NOP;			// delay 62.5ns
+	NOP;			// delay 62.5ns, need second one for micro
+
+	// verify bit value based on pattern passed
+	value = readDOUT();
+
+	resetCAS();		// reset control lines
+	resetRAS();
+
+	return value;
 }
 
 // Fills DRAM with pattern of bits
@@ -258,29 +345,17 @@ void writePattern(int maxRow, int maxCol, byte pattern)
 	byte bitMask = 0x01;
 
 	refstate = REF_OFF; // turn off auto refresh
-	resetCAS();
+	resetCAS();			// make sure all control lines are reset
 	resetRAS();
 	resetWE();
 
+	// bit value based on pattern,  shift pattern mask
 	for (col = 0; col < maxCol; col++)
 	{
 		for (row = 0; row < maxRow; row++)
 		{
-			// write bit value based on pattern passed
-			setDIN(pattern, bitMask);
-			bitMask = bitMask << 1; if (bitMask == 0) bitMask = 1;   // shift pattern mask
-
-			setRow(row);  // set ROW address
-			setRAS();
-			setWE();
-
-			setCol(col);  // set COLUMN address
-			setCAS();
-			NOP;          // delay 62.5ns
-
-			resetWE();    // reset all control lines
-			resetCAS();
-			resetRAS();
+			writeBit(row, col, ((pattern & bitMask) > 0));
+			bitMask = bitMask << 1; if (bitMask == 0) bitMask = 1;
 		}
 	}
 
@@ -295,35 +370,23 @@ unsigned int readPattern(int maxRow, int maxCol, byte pattern)
 	unsigned int miss = 0;
 	byte bitMask = 0x01;
 
-	refstate = REF_OFF;
-	resetCAS();
+	refstate = REF_OFF;	// turn off auto refresh
+	resetCAS();			// make sure all control lines are reset
 	resetRAS();
 	resetWE();
 
+	// verify bit value based on pattern, shift pattern mask
 	for (col = 0; col < maxCol; col++)
 	{
 		for (row = 0; row < maxRow; row++)
 		{
-			setRow(row);   // set ROW address
-			setRAS();
-
-			setCol(col);   // set COLUMN address
-			setCAS();
-			NOP;           // delay 62.5ns
-			NOP;           // delay 62.5ns, need second one for micro
-
-			// verify bit value based on pattern passed
-			if (readBit() != ((pattern & bitMask) != 0)) { miss++; }
-			bitMask = bitMask << 1; if (bitMask == 0) bitMask = 1; // shift pattern mask
-
-			resetCAS();    // reset control lines
-			resetRAS();
+			if (readBit(row, col) != ((pattern & bitMask) != 0)) { miss++; }
+			bitMask = bitMask << 1; if (bitMask == 0) bitMask = 1;
 		}
 	}
 
 	refstate = REF_ON; // enable referesh timer
 	return miss;
-
 }
 
 // helper to clear display and set correct cursor location
@@ -332,7 +395,6 @@ void clearDisplay()
 	display.clearDisplay();   // Clear the buffer
 	display.setCursor(0, 12); // Start at top-left corner
 }
-
 
 // Performs DRAM refresh, 64 Rows each interrupt
 // Interrupt fires every 1ms so all 512 rows are done every 4ms
@@ -351,8 +413,7 @@ ISR(TIMER3_OVF_vect)
 		if (ref_row > ref_maxRow) { ref_row = 0; } // todo: need max row adjusted for part
 	}
 
-	// update Green LED
-	if (ledstate == LED_BLINK)
+	if (ledstate == LED_BLINK)	// update Green LED
 	{  
 		if (blinkCounter > 500) 
 		{   

@@ -76,9 +76,11 @@ void initStandby()
 }
 
 // set Data IN pin of DRAM
-inline void setDIN(byte pattern, byte bitMask)
+//inline void setDIN(byte pattern, byte bitMask)
+inline void setDIN(bool state)
 {
-  PORTF = (PORTF & ~DIN) | ( ((pattern & bitMask)>0) ? DIN : 0); // clear DIN bit, conditinally set
+  //PORTF = (PORTF & ~DIN) | ( ((pattern & bitMask)>0) ? DIN : 0); // clear DIN bit, conditinally set
+  PORTF = (PORTF & ~DIN) | (state ? DIN : 0); // clear DIN bit, conditinally set
 }
 
 // set column address, could combine with row as well
@@ -131,7 +133,7 @@ inline void setWE()
 }
 
 // read bit state from DRAM DOUT pin
-inline bool readBit()
+inline bool readDOUT()
 {
   return ((PINF & DOUT) != 0);
 }

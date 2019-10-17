@@ -38,10 +38,12 @@ enum REFRESH_STATES
 	REF_OFF
 };
 
-
+void writeBit(int row, int col, int state);
+int readBit(int row, int col);
 void writePattern(int maxRow, int maxCol, byte pattern); // write pattern to DRAM
 unsigned int readPattern(int maxRow, int maxCol, byte pattern); // read DRAM, pattern match
-bool showResults(bool fail, unsigned int miss, String lable); // display test results
 void doTests(int maxRow, int maxCol); // do set of tests
+bool runTest(int reps, int pattern, int maxRow, int maxCol, String lable);
+bool walkTest(int reps, int maxRow, int maxCol, int state, String lable); // do march type test
 void clearDisplay(); // helper to clear display set cursor position
 int getBtn(); // returns analog button pressed

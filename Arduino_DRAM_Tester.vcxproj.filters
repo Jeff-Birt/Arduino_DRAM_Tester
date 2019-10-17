@@ -36,5 +36,8 @@
     <ClInclude Include="Uno_Defs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Micro_Defs2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
